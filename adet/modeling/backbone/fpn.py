@@ -49,6 +49,35 @@ class LastLevelP6(nn.Module):
         p6 = self.p6(x)
         return [p6]
 
+@BACKBONE_REGISTRY.register()
+def build_fcos_mvn2_fpn_backbone(cfg, input_shape: ShapeSpec):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = build_mnv2_backbone(cfg, input_shape)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    top_levels = cfg.MODEL.FCOS.TOP_LEVELS
+    in_channels_top = out_channels
+    if top_levels == 2:
+        top_block = LastLevelP6P7(in_channels_top, out_channels, "p5")
+    if top_levels == 1:
+        top_block = LastLevelP6(in_channels_top, out_channels, "p5")
+    elif top_levels == 0:
+        top_block = None
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=top_block,
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
+    return backbone
 
 @BACKBONE_REGISTRY.register()
 def build_fcos_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):

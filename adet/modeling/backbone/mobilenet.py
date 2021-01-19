@@ -8,7 +8,7 @@ from torch.nn import BatchNorm2d
 from detectron2.layers import Conv2d
 from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.modeling.backbone import Backbone
-
+from torch.utils.model_zoo import load_url as load_state_dict_from_url
 
 def conv_bn(inp, oup, stride):
     return nn.Sequential(
@@ -148,7 +148,9 @@ def build_mnv2_backbone(cfg, input_shape):
     out_feature_channels = {"res2": 24, "res3": 32,
                             "res4": 96, "res5": 320}
     out_feature_strides = {"res2": 4, "res3": 8, "res4": 16, "res5": 32}
+    state_dict = load_state_dict_from_url('https://www.dropbox.com/s/47tyzpofuuyyv1b/mobilenetv2_1.0-f2a8633.pth.tar?dl=1', progress=True)
     model = MobileNetV2(cfg)
+    model.load_state_dict(state_dict, strict=False)
     model._out_features = out_features
     model._out_feature_channels = out_feature_channels
     model._out_feature_strides = out_feature_strides
