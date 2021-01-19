@@ -36,12 +36,15 @@ from detectron2.evaluation import (
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA
 from detectron2.utils.logger import setup_logger
+from detectron2.data.datasets import register_coco_instances
 
 from adet.data.dataset_mapper import DatasetMapperWithBasis
 from adet.config import get_cfg
 from adet.checkpoint import AdetCheckpointer
 from adet.evaluation import TextEvaluator
 
+register_coco_instances('custom_coco_train', {}, 'datasets/coco/annotations/custom_instances_train2017.json', 'datasets/coco/train2017')
+register_coco_instances('custom_coco_val', {}, 'datasets/coco/annotations/custom_instances_val2017.json', 'datasets/coco/val2017')
 
 class Trainer(DefaultTrainer):
     """

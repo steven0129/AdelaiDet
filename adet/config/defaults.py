@@ -126,7 +126,7 @@ _C.MODEL.BASIS_MODULE.LOSS_WEIGHT = 0.3
 _C.MODEL.MEInst = CN()
 
 # This is the number of foreground classes.
-_C.MODEL.MEInst.NUM_CLASSES = 80
+_C.MODEL.MEInst.NUM_CLASSES = 11
 _C.MODEL.MEInst.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
 _C.MODEL.MEInst.FPN_STRIDES = [8, 16, 32, 64, 128]
 _C.MODEL.MEInst.PRIOR_PROB = 0.01
