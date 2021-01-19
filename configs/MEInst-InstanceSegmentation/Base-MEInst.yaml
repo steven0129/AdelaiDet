@@ -2,22 +2,26 @@ MODEL:
   MASK_ON: True
   META_ARCHITECTURE: "OneStageDetector"
   BACKBONE:
-    NAME: "build_fcos_resnet_fpn_backbone"
+    NAME: "build_fcos_mvn2_fpn_backbone"
   RESNETS:
     OUT_FEATURES: ["res3", "res4", "res5"]
   FPN:
     IN_FEATURES: ["res3", "res4", "res5"]
   PROPOSAL_GENERATOR:
     NAME: "MEInst"
-  # PIXEL_MEAN: [102.9801, 115.9465, 122.7717]
+  PIXEL_MEAN: [0, 0, 0]
+  PIXEL_STD: [256, 256, 256]
 DATASETS:
-  TRAIN: ("coco_2017_train",)
-  TEST: ("coco_2017_val",)
+  TRAIN: ("custom_coco_train",)
+  TEST: ("custom_coco_train",)
 SOLVER:
-  IMS_PER_BATCH: 16
+  IMS_PER_BATCH: 8
   BASE_LR: 0.01  # Note that RetinaNet uses a different default learning rate
   STEPS: (60000, 80000)
   MAX_ITER: 90000
 INPUT:
-  MIN_SIZE_TRAIN: (640, 672, 704, 736, 768, 800)
+  MAX_SIZE_TRAIN: 640
+  MIN_SIZE_TRAIN: (640,)
+  MAX_SIZE_TEST: 640
+  MIN_SIZE_TEST: 640
 VERSION: 2
