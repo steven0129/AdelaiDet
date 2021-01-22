@@ -242,10 +242,14 @@ class MEInstHead(nn.Module):
                         with_modulated_dcn=True
                     ))
                 elif type_func == "Conv2d":
-                    tower.append(conv_func(
-                        in_channels, in_channels,
-                        kernel_size=3, stride=1,
-                        padding=1, bias=True
+                    tower.append(nn.Sequential(
+                        # dw
+                        nn.Conv2d(in_channels, in_channels, 3, 1, 1, groups=in_channels, bias=False),
+                        nn.BatchNorm2d(in_channels),
+                        nn.ReLU(),
+                        # pw-linear
+                        nn.Conv2d(in_channels, in_channels, 1, 1, 0, bias=True),
+                        nn.BatchNorm2d(in_channels),
                     ))
                 else:
                     raise NotImplementedError
@@ -295,7 +299,8 @@ class MEInstHead(nn.Module):
             for l in modules.modules():
                 if isinstance(l, nn.Conv2d):
                     torch.nn.init.normal_(l.weight, std=0.01)
-                    torch.nn.init.constant_(l.bias, 0)
+                    if l.bias != None:
+                        torch.nn.init.constant_(l.bias, 0)
 
         # initialize the bias for focal loss
         prior_prob = cfg.MODEL.MEInst.PRIOR_PROB
