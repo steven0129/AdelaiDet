@@ -3,9 +3,9 @@ MODEL:
   MEInst:
     DIM_MASK: 60
     MASK_SIZE: 28
-    NORM: "none"
+    NORM: "BN"
 SOLVER:
   WARMUP_METHOD: "linear"
   WARMUP_FACTOR: 0.3333
   WARMUP_ITERS: 500
-OUTPUT_DIR: "output/MEInst/R_50_1x_none_320x320_bias_DW"
+OUTPUT_DIR: "output/MEInst/R_50_1x_none_320x320_BN_not_share"
