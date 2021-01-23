@@ -206,106 +206,129 @@ class MEInstHead(nn.Module):
         in_channels = [s.channels for s in input_shape]
         assert len(set(in_channels)) == 1, "Each level must have the same channel!"
         in_channels = in_channels[0]
+        
+        self.cls_tower = nn.ModuleList()
+        self.bbox_tower = nn.ModuleList()
+        self.share_tower = nn.ModuleList()
+        self.mask_tower = nn.ModuleList()
+        self.cls_logits = nn.ModuleList()
+        self.bbox_pred = nn.ModuleList()
+        self.ctrness = nn.ModuleList()
+        self.mask_pred = nn.ModuleList()
 
-        for head in head_configs:
-            tower = []
-            num_convs, use_deformable = head_configs[head]
-            for i in range(num_convs):
-                # conv type.
-                if use_deformable:
-                    if self.last_deformable:
-                        if i == num_convs - 1:
+        for head_idx in range(len(input_shape)):
+            for head in head_configs:
+                tower = []
+                num_convs, use_deformable = head_configs[head]
+                for i in range(num_convs):
+                    # conv type.
+                    if use_deformable:
+                        if self.last_deformable:
+                            if i == num_convs - 1:
+                                conv_func = DFConv2d
+                                type_func = self.type_deformable
+                            else:
+                                conv_func = nn.Conv2d
+                                type_func = "Conv2d"
+                        else:
                             conv_func = DFConv2d
                             type_func = self.type_deformable
-                        else:
-                            conv_func = nn.Conv2d
-                            type_func = "Conv2d"
                     else:
-                        conv_func = DFConv2d
-                        type_func = self.type_deformable
-                else:
-                    conv_func = nn.Conv2d
-                    type_func = "Conv2d"
-                # conv operation.
-                if type_func == "DCNv1":
-                    tower.append(conv_func(
-                        in_channels, in_channels,
-                        kernel_size=3, stride=1,
-                        padding=1, bias=False,
-                        with_modulated_dcn=False
-                    ))
-                elif type_func == "DCNv2":
-                    tower.append(conv_func(
-                        in_channels, in_channels,
-                        kernel_size=3, stride=1,
-                        padding=1, bias=False,
-                        with_modulated_dcn=True
-                    ))
-                elif type_func == "Conv2d":
-                    tower.append(nn.Sequential(
-                        # dw
-                        nn.Conv2d(in_channels, in_channels, 3, 1, 1, groups=in_channels, bias=False),
-                        nn.BatchNorm2d(in_channels),
-                        nn.ReLU(),
-                        # pw-linear
-                        nn.Conv2d(in_channels, in_channels, 1, 1, 0, bias=True),
-                        nn.BatchNorm2d(in_channels),
-                    ))
-                else:
-                    raise NotImplementedError
-                # norm.
-                if norm == "GN":
-                    tower.append(nn.GroupNorm(32, in_channels))
-                elif norm == "NaiveGN":
-                    tower.append(NaiveGroupNorm(32, in_channels))
-                # activation.
-                tower.append(nn.ReLU())
-            self.add_module('{}_tower'.format(head),
-                            nn.Sequential(*tower))
+                        conv_func = nn.Conv2d
+                        type_func = "Conv2d"
+                    # conv operation.
+                    if type_func == "DCNv1":
+                        tower.append(conv_func(
+                            in_channels, in_channels,
+                            kernel_size=3, stride=1,
+                            padding=1, bias=False,
+                            with_modulated_dcn=False
+                        ))
+                    elif type_func == "DCNv2":
+                        tower.append(conv_func(
+                            in_channels, in_channels,
+                            kernel_size=3, stride=1,
+                            padding=1, bias=False,
+                            with_modulated_dcn=True
+                        ))
+                    elif type_func == "Conv2d":
+                        tower.append(nn.Sequential(
+                            # dw
+                            nn.Conv2d(in_channels, in_channels, 3, 1, 1, groups=in_channels, bias=False),
+                            nn.BatchNorm2d(in_channels),
+                            nn.ReLU(),
+                            # pw-linear
+                            nn.Conv2d(in_channels, in_channels, 1, 1, 0, bias=True),
+                            nn.BatchNorm2d(in_channels),
+                        ))
+                    else:
+                        raise NotImplementedError
+                    # norm.
+                    if norm == "GN":
+                        tower.append(nn.GroupNorm(32, in_channels))
+                    elif norm == "NaiveGN":
+                        tower.append(NaiveGroupNorm(32, in_channels))
+                    elif norm == "BN":
+                        tower.append(nn.BatchNorm2d(in_channels))
+                    # activation.
+                    tower.append(nn.ReLU())
+                
+                if head == 'cls':
+                    self.cls_tower.append(nn.Sequential(*tower))
+                elif head == 'bbox':
+                    self.bbox_tower.append(nn.Sequential(*tower))
+                elif head == 'share':
+                    self.share_tower.append(nn.Sequential(*tower))
+                elif head == 'mask':
+                    self.mask_tower.append(nn.Sequential(*tower))
+                # self.add_module('{}_tower'.format(head), nn.Sequential(*tower))
 
-        self.cls_logits = nn.Conv2d(
-            in_channels, self.num_classes,
-            kernel_size=3, stride=1,
-            padding=1
-        )
-        self.bbox_pred = nn.Conv2d(
-            in_channels, 4, kernel_size=3,
-            stride=1, padding=1
-        )
-        self.ctrness = nn.Conv2d(
-            in_channels, 1, kernel_size=3,
-            stride=1, padding=1
-        )
+            self.cls_logits.append(nn.Conv2d(
+                in_channels, self.num_classes,
+                kernel_size=3, stride=1,
+                padding=1
+            ))
+            self.bbox_pred.append(nn.Conv2d(
+                in_channels, 4, kernel_size=3,
+                stride=1, padding=1
+            ))
+            self.ctrness.append(nn.Conv2d(
+                in_channels, 1, kernel_size=3,
+                stride=1, padding=1
+            ))
 
-        if self.use_gcn_in_mask:
-            self.mask_pred = GCN(in_channels, self.dim_mask, k=self.gcn_kernel_size)
-        else:
-            self.mask_pred = nn.Conv2d(
+            self.mask_pred.append(nn.Conv2d(
                 in_channels, self.dim_mask, kernel_size=3,
                 stride=1, padding=1
-            )
+            ))
+
+            # if self.use_gcn_in_mask:
+            #     self.mask_pred = GCN(in_channels, self.dim_mask, k=self.gcn_kernel_size)
+            # else:
+                
 
         if cfg.MODEL.MEInst.USE_SCALE:
             self.scales = nn.ModuleList([Scale(init_value=1.0) for _ in self.fpn_strides])
         else:
             self.scales = None
 
-        for modules in [
-            self.cls_tower, self.bbox_tower,
-            self.share_tower, self.cls_logits,
-            self.bbox_pred, self.ctrness,
-            self.mask_tower, self.mask_pred
-        ]:
-            for l in modules.modules():
-                if isinstance(l, nn.Conv2d):
-                    torch.nn.init.normal_(l.weight, std=0.01)
-                    if l.bias != None:
-                        torch.nn.init.constant_(l.bias, 0)
+        for head_idx in range(len(input_shape)):
+            for modules in [
+                self.cls_tower[head_idx], self.bbox_tower[head_idx],
+                self.share_tower[head_idx], self.cls_logits[head_idx],
+                self.bbox_pred[head_idx], self.ctrness[head_idx],
+                self.mask_tower[head_idx], self.mask_pred[head_idx]
+            ]:
+                for l in modules.modules():
+                    if isinstance(l, nn.Conv2d):
+                        torch.nn.init.normal_(l.weight, std=0.01)
+                        if l.bias != None:
+                            torch.nn.init.constant_(l.bias, 0)
 
-        # initialize the bias for focal loss
-        prior_prob = cfg.MODEL.MEInst.PRIOR_PROB
-        bias_value = -math.log((1 - prior_prob) / prior_prob)
-        torch.nn.init.constant_(self.cls_logits.bias, bias_value)
+            # initialize the bias for focal loss
+            prior_prob = cfg.MODEL.MEInst.PRIOR_PROB
+            bias_value = -math.log((1 - prior_prob) / prior_prob)
+            torch.nn.init.constant_(self.cls_logits[head_idx].bias, bias_value)
 
     def forward(self, x):
         logits = []
@@ -314,20 +337,20 @@ class MEInstHead(nn.Module):
         bbox_towers = []
         mask_reg = []
         for l, feature in enumerate(x):
-            feature = self.share_tower(feature)
-            cls_tower = self.cls_tower(feature)
-            bbox_tower = self.bbox_tower(feature)
+            feature = self.share_tower[l](feature)
+            cls_tower = self.cls_tower[l](feature)
+            bbox_tower = self.bbox_tower[l](feature)
 
-            logits.append(self.cls_logits(cls_tower))
-            ctrness.append(self.ctrness(bbox_tower))
-            reg = self.bbox_pred(bbox_tower)
+            logits.append(self.cls_logits[l](cls_tower))
+            ctrness.append(self.ctrness[l](bbox_tower))
+            reg = self.bbox_pred[l](bbox_tower)
             if self.scales is not None:
                 reg = self.scales[l](reg)
             # Note that we use relu, as in the improved MEInst, instead of exp.
             bbox_reg.append(F.relu(reg))
 
             # Mask Encoding
-            mask_tower = self.mask_tower(feature)
-            mask_reg.append(self.mask_pred(mask_tower))
+            mask_tower = self.mask_tower[l](feature)
+            mask_reg.append(self.mask_pred[l](mask_tower))
 
         return logits, bbox_reg, ctrness, bbox_towers, mask_reg
